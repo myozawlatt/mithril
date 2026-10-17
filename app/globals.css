@@ -1,26 +1,360 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/*
+ * High-contrast text tokens (WCAG contrast on the worst card surface / the
+ * darkest page gradient): ink 17:1 / 12.8:1, muted 10.2:1 / 7.2:1,
+ * accent 8.4:1 / 6:1, white on accent 9:1. Never fade text with opacity.
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-ramabhadra), var(--font-myanmar), ui-sans-serif, system-ui, sans-serif;
+  --color-ink: #0f0c1a;
+  --color-muted: #3f3954;
+  --color-accent: #5b21b6;
+  /* Accent for text: one step deeper so it stays ≥7:1 on the tinted cards. */
+  --color-accent-ink: #4c1d95;
+  --color-accent-soft: #ede4ff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  color-scheme: light;
+  --bg-gradient:
+    radial-gradient(120% 60% at 10% 0%, rgb(255 255 255 / 0.85) 0%, transparent 55%),
+    radial-gradient(90% 50% at 100% 100%, rgb(196 167 255 / 0.45) 0%, transparent 60%),
+    linear-gradient(165deg, #faf7ff 0%, #f1e9ff 38%, #e6d8ff 72%, #dccaff 100%);
+}
+
+html {
+  background: #f1e9ff;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100dvh;
+  color: var(--color-ink);
+  /* Transparent so the fixed galaxy layer (z-index -1) shows through. */
+  background: transparent;
+  /* Equal-width digits so amounts line up in lists. */
+  font-feature-settings: "tnum" 1;
+  /*
+   * Ramabhadra has a single weight (400). Bold-styled text (font-semibold and
+   * up) intentionally uses the browser's synthesized bold on top of it — that
+   * extra-heavy rendering is the chosen look. Keep `font-synthesis` at its
+   * default; setting it to `none` makes all text the same, lighter weight.
+   */
+  overscroll-behavior-y: none;
+}
+
+/*
+ * Galaxy backdrop: drifting nebula clouds, two layers of noise smoke and a few
+ * stars over the lavender gradient. Pastel and light on purpose — page-level
+ * text sits on it and must keep its contrast. Only transforms/opacity animate.
+ */
+.galaxy {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--bg-gradient);
+}
+
+.nebula {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+  animation: nebula-drift 48s ease-in-out infinite alternate;
+}
+
+/* Sits below the header band so the month name and Back keep their contrast. */
+.nebula-1 {
+  width: 110vmax;
+  height: 70vmax;
+  left: -45vmax;
+  top: 8vh;
+  background: radial-gradient(closest-side, rgb(167 139 250 / 0.4), transparent);
+}
+
+.nebula-2 {
+  width: 90vmax;
+  height: 60vmax;
+  right: -45vmax;
+  top: 18vh;
+  background: radial-gradient(closest-side, rgb(232 121 249 / 0.26), transparent);
+  animation-duration: 62s;
+  animation-direction: alternate-reverse;
+}
+
+.nebula-3 {
+  width: 100vmax;
+  height: 65vmax;
+  left: -30vmax;
+  bottom: -30vmax;
+  background: radial-gradient(closest-side, rgb(129 140 248 / 0.3), transparent);
+  animation-duration: 70s;
+}
+
+.nebula-4 {
+  width: 70vmax;
+  height: 50vmax;
+  right: -25vmax;
+  bottom: -18vmax;
+  background: radial-gradient(closest-side, rgb(103 232 249 / 0.18), transparent);
+  animation-duration: 54s;
+  animation-direction: alternate-reverse;
+}
+
+.smoke {
+  position: absolute;
+  inset: -25%;
+  width: 150%;
+  height: 150%;
+  will-change: transform;
+  animation: smoke-drift 90s linear infinite alternate;
+}
+
+.smoke-2 {
+  animation-duration: 120s;
+  animation-direction: alternate-reverse;
+}
+
+.stars {
+  position: absolute;
+  inset: 0;
+  /* White cores with a violet glow, so they read on both light and smoky areas. */
+  background-image:
+    radial-gradient(2.4px 2.4px at 12% 18%, #fff 40%, rgb(139 92 246 / 0.6) 70%, transparent),
+    radial-gradient(1.8px 1.8px at 78% 9%, #fff 40%, rgb(139 92 246 / 0.5) 70%, transparent),
+    radial-gradient(3px 3px at 64% 34%, #fff 35%, rgb(167 139 250 / 0.6) 70%, transparent),
+    radial-gradient(1.6px 1.6px at 31% 47%, rgb(124 58 237 / 0.7), transparent),
+    radial-gradient(2.4px 2.4px at 88% 58%, #fff 40%, rgb(139 92 246 / 0.6) 70%, transparent),
+    radial-gradient(1.8px 1.8px at 22% 72%, #fff 40%, rgb(139 92 246 / 0.5) 70%, transparent),
+    radial-gradient(3px 3px at 52% 83%, #fff 35%, rgb(167 139 250 / 0.6) 70%, transparent),
+    radial-gradient(1.6px 1.6px at 70% 92%, rgb(124 58 237 / 0.65), transparent),
+    radial-gradient(1.8px 1.8px at 41% 8%, rgb(124 58 237 / 0.6), transparent),
+    radial-gradient(2.4px 2.4px at 6% 91%, #fff 40%, rgb(139 92 246 / 0.6) 70%, transparent),
+    radial-gradient(1.6px 1.6px at 94% 30%, #fff 40%, rgb(139 92 246 / 0.5) 70%, transparent),
+    radial-gradient(2px 2px at 46% 62%, #fff 40%, rgb(139 92 246 / 0.5) 70%, transparent);
+  background-size: 100% 100%;
+  animation: twinkle 7s ease-in-out infinite alternate;
+}
+
+/* Light falling from above: keeps the header band clean and its text crisp. */
+.galaxy-haze {
+  position: absolute;
+  inset: 0 0 auto;
+  height: calc(env(safe-area-inset-top) + 9rem);
+  background: linear-gradient(to bottom, rgb(250 247 255 / 0.85) 0%, rgb(250 247 255 / 0.55) 55%, transparent);
+}
+
+.stars-2 {
+  background-size: 140% 140%;
+  background-position: 30% 60%;
+  animation-duration: 11s;
+  animation-delay: -4s;
+}
+
+/*
+ * 10,000 kyat notes and ledgers caught mid-fall (components/MoneyFlutter.tsx).
+ * Still on purpose: each item only has a fixed size (--w), opacity (--o), spin
+ * and 3D tilt, set inline. Sizes are in --u, which grows a little on wide
+ * screens so the notes still read as notes beside the centred app column.
+ * The scans are precached in public/sw.js so they show offline.
+ */
+.money {
+  position: absolute;
+  inset: 0;
+  --u: 1rem;
+}
+
+@media (width >= 48rem) {
+  .money {
+    --u: clamp(1rem, 2.3vmin, 1.5rem);
+  }
+}
+
+.money-item {
+  position: absolute;
+  display: block;
+  width: calc(var(--w) * var(--u));
+  transform-origin: center;
+  transform: perspective(900px) rotateZ(var(--rz)) rotateX(var(--rx)) rotateY(var(--ry));
+  opacity: var(--o);
+  filter: drop-shadow(0 8px 12px rgb(30 20 70 / 0.16));
+}
+
+.money-item svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.note {
+  aspect-ratio: 735 / 336;
+  border-radius: 3px;
+  background-size: 100% 100%;
+}
+
+.note-front {
+  background-image: url("/notes/10000-front.jpg");
+}
+
+.note-back {
+  background-image: url("/notes/10000-back.jpg");
+}
+
+/*
+ * Legibility halo: text sitting straight on the smoke gets a soft white glow so
+ * it keeps high contrast. On the white cards the glow is invisible; white text
+ * on coloured buttons opts out so it stays crisp.
+ */
+main {
+  text-shadow:
+    0 0 1px rgb(255 255 255 / 0.95),
+    0 0 3px rgb(255 255 255 / 0.9),
+    0 0 12px rgb(255 255 255 / 0.85);
+}
+
+main .text-white {
+  text-shadow: none;
+}
+
+@keyframes nebula-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(6vmax, 4vmax, 0) scale(1.12);
+  }
+}
+
+@keyframes smoke-drift {
+  from {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  to {
+    transform: translate3d(-8%, -5%, 0) rotate(6deg);
+  }
+}
+
+@keyframes twinkle {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nebula,
+  .smoke,
+  .stars {
+    animation: none;
+  }
+}
+
+/* Frosted surface used by cards and sheets. */
+@utility glass {
+  /*
+   * Lavender-tinted frost rather than flat white, so cards pick up the galaxy
+   * colours. The blur smooths the smoke behind; text contrast is re-measured
+   * against the real rendered pixels.
+   */
+  background: rgb(248 243 255 / 0.58);
+  border: 1px solid rgb(255 255 255 / 0.55);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    0 1px 2px rgb(76 29 149 / 0.05),
+    0 12px 32px -12px rgb(76 29 149 / 0.22);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+}
+
+/*
+ * Opt a region out of the synthesized bold (expense rows, months report):
+ * Ramabhadra then renders at its single real weight — lighter, calmer.
+ */
+@utility no-fake-bold {
+  font-synthesis: style small-caps;
+}
+
+/* Opt back in inside a no-fake-bold region, e.g. the year's headline amount. */
+@utility fake-bold {
+  font-synthesis: weight style small-caps;
+}
+
+@utility pt-safe {
+  padding-top: max(env(safe-area-inset-top), 1rem);
+}
+
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-sheet {
+  animation: sheet-up 280ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.animate-fade {
+  animation: fade-in 200ms ease-out both;
+}
+
+.animate-toast {
+  animation: toast-in 220ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+/* Undo countdown ring: full → empty. Duration is set inline to match the timer. */
+@keyframes countdown {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 100;
+  }
+}
+
+.animate-countdown {
+  animation: countdown linear forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet,
+  .animate-toast,
+  .animate-fade {
+    animation: none;
+  }
+}
+
+/* Hide number-input spinners; we use inputmode="numeric" on a text field anyway. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
 }
