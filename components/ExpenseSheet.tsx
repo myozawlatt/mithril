@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import AmountInput from "./AmountInput";
 import LabelPicker from "./LabelPicker";
 import Sheet from "./Sheet";
@@ -8,6 +8,8 @@ import type { Expense } from "@/lib/db";
 import { formatNumber, parseAmount, todayKey } from "@/lib/format";
 import { cleanLabelName } from "@/lib/labels";
 import { addExpense, updateExpense, type LabelIndex } from "@/lib/repo";
+
+const NOTE_MAX = 80;
 
 type Props = {
   open: boolean;
@@ -48,6 +50,7 @@ function ExpenseForm({
   const [note, setNote] = useState(expense?.note ?? "");
   const amountRef = useRef<HTMLInputElement>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
+  const noteCountId = useId();
 
   // Grow the note box to fit its wrapped lines.
   useLayoutEffect(() => {
@@ -98,22 +101,39 @@ function ExpenseForm({
           className="h-12 rounded-2xl bg-accent-soft/70 px-3 text-sm font-medium text-ink outline-none focus:ring-2 focus:ring-violet-300"
         />
         {/* A textarea so a long note wraps; it stays one line of text, and Enter still submits. */}
-        <textarea
-          ref={noteRef}
-          value={note}
-          onChange={(e) => setNote(e.target.value.replace(/\s*\n\s*/g, " "))}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            e.preventDefault();
-            e.currentTarget.form?.requestSubmit();
-          }}
-          placeholder="Note (optional)"
-          maxLength={80}
-          rows={1}
-          enterKeyHint="done"
-          aria-label="Note"
-          className="min-h-12 min-w-0 resize-none overflow-hidden rounded-2xl bg-accent-soft/70 px-4 py-3.5 text-sm leading-5 text-ink outline-none placeholder:text-muted focus:ring-2 focus:ring-violet-300"
-        />
+        <div className="relative min-w-0">
+          <textarea
+            ref={noteRef}
+            value={note}
+            onChange={(e) => setNote(e.target.value.replace(/\s*\n\s*/g, " "))}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }}
+            placeholder="Note (optional)"
+            maxLength={NOTE_MAX}
+            rows={1}
+            enterKeyHint="done"
+            aria-label="Note"
+            aria-describedby={noteCountId}
+            className="block min-h-12 w-full resize-none overflow-hidden rounded-2xl bg-accent-soft/70 py-3.5 pr-12 pl-4 text-sm leading-5 text-ink outline-none placeholder:text-muted focus:ring-2 focus:ring-violet-300"
+          />
+          {/* Count and limit sit on the last line, clear of the text (pr-12). */}
+          <span
+            id={noteCountId}
+            className={`pointer-events-none absolute right-3 bottom-3.5 text-[11px] leading-5 tabular-nums ${
+              note.length >= NOTE_MAX ? "font-semibold text-rose-700" : "text-muted"
+            }`}
+          >
+            <span aria-hidden>
+              {note.length}/{NOTE_MAX}
+            </span>
+            <span className="sr-only">
+              {note.length} of {NOTE_MAX} characters
+            </span>
+          </span>
+        </div>
       </div>
 
       <div className="flex gap-2">
