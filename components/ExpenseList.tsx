@@ -46,8 +46,9 @@ export default function ExpenseList({ expenses, labels, onSelect, onDelete }: Pr
                       {labelInitials(l.name)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[15px] font-medium">{e.note || l.name}</span>
-                      {e.note && <span className="block truncate text-xs text-muted">{l.name}</span>}
+                      {/* Label always leads; the note (80 chars at most) wraps in full below it. */}
+                      <span className="block truncate text-[15px] font-medium">{l.name}</span>
+                      {e.note && <span className="block text-xs wrap-break-word text-muted">{e.note}</span>}
                     </span>
                     <span className="shrink-0 text-[15px] font-semibold tabular-nums">{formatMoney(e.amount)}</span>
                   </SwipeRow>

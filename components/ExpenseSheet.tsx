@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import AmountInput from "./AmountInput";
 import LabelPicker from "./LabelPicker";
 import Sheet from "./Sheet";
@@ -42,13 +42,20 @@ function ExpenseForm({
   onDelete: (e: Expense) => void;
 }) {
   const [amount, setAmount] = useState(expense ? formatNumber(expense.amount) : "");
-  // Editing keeps its label; a new expense starts from the most recently used one.
-  const [label, setLabel] = useState(
-    () => (expense ? labels.byId.get(expense.labelId)?.name : labels.suggestions[0]?.name) ?? "",
-  );
+  // Editing keeps its label; a new expense starts with none, so the label is always a choice.
+  const [label, setLabel] = useState(() => (expense ? labels.byId.get(expense.labelId)?.name : undefined) ?? "");
   const [date, setDate] = useState(expense?.date ?? todayKey());
   const [note, setNote] = useState(expense?.note ?? "");
   const amountRef = useRef<HTMLInputElement>(null);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
+
+  // Grow the note box to fit its wrapped lines.
+  useLayoutEffect(() => {
+    const el = noteRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [note]);
 
   useEffect(() => {
     // Focus after the slide-in so iOS keeps the sheet in view.
@@ -90,14 +97,22 @@ function ExpenseForm({
           aria-label="Date"
           className="h-12 rounded-2xl bg-accent-soft/70 px-3 text-sm font-medium text-ink outline-none focus:ring-2 focus:ring-violet-300"
         />
-        <input
+        {/* A textarea so a long note wraps; it stays one line of text, and Enter still submits. */}
+        <textarea
+          ref={noteRef}
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={(e) => setNote(e.target.value.replace(/\s*\n\s*/g, " "))}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+          }}
           placeholder="Note (optional)"
           maxLength={80}
+          rows={1}
           enterKeyHint="done"
           aria-label="Note"
-          className="h-12 min-w-0 rounded-2xl bg-accent-soft/70 px-4 text-sm text-ink outline-none placeholder:text-muted focus:ring-2 focus:ring-violet-300"
+          className="min-h-12 min-w-0 resize-none overflow-hidden rounded-2xl bg-accent-soft/70 px-4 py-3.5 text-sm leading-5 text-ink outline-none placeholder:text-muted focus:ring-2 focus:ring-violet-300"
         />
       </div>
 
