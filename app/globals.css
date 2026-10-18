@@ -253,6 +253,11 @@ main .text-white {
   }
 }
 
+/* Set by components/Sheet.tsx while a sheet is open: hold the galaxy still. */
+.sheet-open .galaxy * {
+  animation-play-state: paused;
+}
+
 /* Frosted surface used by cards and sheets. */
 @utility glass {
   /*

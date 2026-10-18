@@ -9,6 +9,9 @@ type Props = {
   children: ReactNode;
 };
 
+/** Sheets open right now; one can open over another (the PIN sheet). */
+let openSheets = 0;
+
 /** Bottom sheet on mobile, centered card on wider screens. */
 export default function Sheet({ open, onClose, title, children }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -43,10 +46,16 @@ export default function Sheet({ open, onClose, title, children }: Props) {
     document.addEventListener("keydown", onKey);
     const { overflow } = document.body.style;
     document.body.style.overflow = "hidden";
+    // Pause the galaxy behind the sheet (globals.css), so the phone isn't
+    // redrawing it and the frosted cards while the sheet opens and the keyboard is up.
+    openSheets += 1;
+    document.documentElement.classList.add("sheet-open");
 
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = overflow;
+      openSheets -= 1;
+      if (!openSheets) document.documentElement.classList.remove("sheet-open");
       previouslyFocused?.focus?.();
     };
   }, [open]);
@@ -60,7 +69,8 @@ export default function Sheet({ open, onClose, title, children }: Props) {
         aria-label="Close"
         tabIndex={-1}
         onClick={onClose}
-        className="animate-fade absolute inset-0 bg-[#2e1065]/25 backdrop-blur-[2px]"
+        // A plain tint: a backdrop blur here re-blurs the moving galaxy every frame.
+        className="animate-fade absolute inset-0 bg-[#2e1065]/25"
       />
       <div
         ref={panelRef}
