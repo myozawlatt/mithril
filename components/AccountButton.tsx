@@ -43,14 +43,20 @@ export default function AccountButton({ offline = false }: { offline?: boolean }
         aria-label={offline ? "Account, offline" : "Account"}
         title={offline ? "Offline · changes are saved on this device" : undefined}
         onClick={() => setOpen(true)}
-        className="grid size-11 shrink-0 place-items-center rounded-full transition active:bg-white/60"
+        className="relative grid size-11 shrink-0 place-items-center rounded-full transition active:bg-white/60"
       >
-        <span className="relative grid size-8 place-items-center rounded-full bg-accent text-sm font-semibold text-white" aria-hidden>
+        <span className="grid size-8 place-items-center rounded-full bg-accent text-sm font-semibold text-white" aria-hidden>
           {initial}
-          {offline && (
-            <span className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full bg-amber-400 ring-2 ring-white" />
-          )}
         </span>
+        {/* Overlaps the avatar's foot and stays within the button's width, so the header never grows. */}
+        {offline && (
+          <span
+            className="absolute bottom-0.5 left-1/2 -translate-x-1/2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] leading-none font-bold text-amber-950 ring-2 ring-white text-shadow-none"
+            aria-hidden
+          >
+            Offline
+          </span>
+        )}
       </button>
 
       <Sheet open={open} onClose={() => setOpen(false)} title="Account">
