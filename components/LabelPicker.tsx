@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import type { Label } from "@/lib/db";
-import { labelKey } from "@/lib/labels";
+import { LABEL_MAX, labelKey } from "@/lib/labels";
 import type { LabelIndex } from "@/lib/repo";
 
 type Props = {
@@ -17,6 +17,7 @@ type Props = {
  */
 export default function LabelPicker({ value, onChange, labels }: Props) {
   const key = labelKey(value);
+  const countId = useId();
 
   const { matches, exact } = useMemo(() => {
     const all = [...labels.byId.values()];
@@ -36,17 +37,33 @@ export default function LabelPicker({ value, onChange, labels }: Props) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Label, e.g. Coffee"
-          maxLength={32}
+          maxLength={LABEL_MAX}
           enterKeyHint="done"
           autoCapitalize="words"
           aria-label="Label"
-          className="h-12 w-full rounded-2xl bg-accent-soft/70 pr-24 pl-4 text-[15px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-muted focus:ring-2 focus:ring-violet-300"
+          aria-describedby={countId}
+          className={`h-12 w-full rounded-2xl bg-accent-soft/70 pl-4 text-[15px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-muted focus:ring-2 focus:ring-violet-300 ${
+            isNew ? "pr-32" : "pr-14"
+          }`}
         />
-        {isNew && (
-          <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-accent-ink shadow-sm">
-            New label
+        <span className="pointer-events-none absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-2">
+          {isNew && (
+            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-accent-ink shadow-sm">
+              New label
+            </span>
+          )}
+          <span
+            id={countId}
+            className={`text-[11px] tabular-nums ${value.length >= LABEL_MAX ? "font-semibold text-rose-700" : "text-muted"}`}
+          >
+            <span aria-hidden>
+              {value.length}/{LABEL_MAX}
+            </span>
+            <span className="sr-only">
+              {value.length} of {LABEL_MAX} characters
+            </span>
           </span>
-        )}
+        </span>
       </div>
 
       {matches.length > 0 && (

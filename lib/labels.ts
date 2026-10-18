@@ -23,9 +23,12 @@ export function labelColorAt(index: number): string {
   return LABEL_COLORS[index] ?? EXTRA_LABEL_COLOR;
 }
 
+/** Longest label name, in characters (UTF-16 units, as `maxLength` counts them). */
+export const LABEL_MAX = 32;
+
 /** Trim and collapse inner whitespace; keeps the user's casing. */
 export function cleanLabelName(name: string): string {
-  return name.trim().replace(/\s+/g, " ").slice(0, 32);
+  return name.trim().replace(/\s+/g, " ").slice(0, LABEL_MAX);
 }
 
 /** Identity used for upserts: "  coffee " and "Coffee" are the same label. */
