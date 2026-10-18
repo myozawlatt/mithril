@@ -2,7 +2,6 @@
 
 import { useSyncExternalStore } from "react";
 import AccountButton from "./AccountButton";
-import InstallButton from "./InstallButton";
 import MonthNav from "./MonthNav";
 import type { MonthKey } from "@/lib/format";
 
@@ -41,7 +40,6 @@ export default function Header({ month, onMonthChange, onSearch, onOpenSummary }
             <path d="m20 20-3.5-3.5" />
           </svg>
         </button>
-        <InstallButton />
         {/* Offline shows as a dot on the avatar: a pill here pushed the avatar past the edge on phones. */}
         <AccountButton offline={!online} />
       </div>

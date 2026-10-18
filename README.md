@@ -62,7 +62,7 @@ To test offline mode, run `npm run build && npm start`, install the app as above
 | `components/Tracker.tsx` | The screen: month header, summary card, list, sheets |
 | `lib/db.ts` | Dexie schema (`expenses`, `labels`, `prefs`) and its migrations |
 | `lib/repo.ts` | **The only module that touches storage.** CRUD, label upsert, live queries, budget, and the sync helpers, all scoped to the signed-in user |
-| `lib/useInstallPrompt.ts` | Logic for the mobile-only Install button (native prompt on Android, steps sheet on iOS) |
+| `lib/useInstallPrompt.ts` | Install state for `components/InstallScreen.tsx` (native prompt on Android, Add to Home Screen steps on iOS) and the in-memory "web version" choice |
 | `app/manifest.ts` | Web App Manifest |
 | `components/GalaxyBackdrop.tsx` | Fixed background behind every screen: galaxy, plus still 10,000 kyat notes and ledgers (`components/MoneyFlutter.tsx`, scans in `public/notes/`) |
 | `public/sw.js` | Offline caching. Bump `VERSION` to purge old caches. |

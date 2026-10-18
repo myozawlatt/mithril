@@ -7,7 +7,6 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-const MOBILE_QUERY = "(max-width: 768px), (pointer: coarse)";
 const STANDALONE_QUERY = "(display-mode: standalone)";
 
 function mediaStore(query: string) {
@@ -21,7 +20,6 @@ function mediaStore(query: string) {
   };
 }
 
-const mobile = mediaStore(MOBILE_QUERY);
 const standalone = mediaStore(STANDALONE_QUERY);
 const noopSubscribe = () => () => {};
 
@@ -105,7 +103,6 @@ export function useWebVersion() {
 export function useInstallPrompt() {
   const { event: deferred, installed } = useSyncExternalStore(subscribePrompt, () => snapshot, () => SERVER_SNAPSHOT);
 
-  const isMobile = useSyncExternalStore(mobile.subscribe, mobile.get, () => false);
   const isMobileDevice = useSyncExternalStore(noopSubscribe, detectMobileDevice, () => false);
   // Server snapshot says "installed" so nothing flashes before we know.
   const isStandalone = useSyncExternalStore(standalone.subscribe, detectStandalone, () => true);
@@ -118,7 +115,5 @@ export function useInstallPrompt() {
     prompt.set({ event: null, ...(outcome === "accepted" ? { installed: true } : {}) });
   }, [deferred]);
 
-  const showInstall = isMobile && !isStandalone && !installed && (deferred !== null || isIos);
-
-  return { showInstall, isIos, isMobileDevice, isStandalone, installed, canPrompt: deferred !== null, promptInstall };
+  return { isIos, isMobileDevice, isStandalone, installed, canPrompt: deferred !== null, promptInstall };
 }
