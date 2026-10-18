@@ -21,7 +21,7 @@ const rowClass =
   "h-12 w-full rounded-2xl bg-accent-soft/60 px-4 text-left text-sm font-semibold text-ink transition active:bg-accent-soft";
 
 /** Avatar in the header; opens who's signed in, security settings and Sign out. */
-export default function AccountButton() {
+export default function AccountButton({ offline = false }: { offline?: boolean }) {
   const user = useUser();
   const hasPin = useHasPin(user.id);
   const autoLock = useAutoLock();
@@ -40,12 +40,16 @@ export default function AccountButton() {
     <>
       <button
         type="button"
-        aria-label="Account"
+        aria-label={offline ? "Account, offline" : "Account"}
+        title={offline ? "Offline · changes are saved on this device" : undefined}
         onClick={() => setOpen(true)}
-        className="grid size-11 place-items-center rounded-full transition active:bg-white/60"
+        className="grid size-11 shrink-0 place-items-center rounded-full transition active:bg-white/60"
       >
-        <span className="grid size-8 place-items-center rounded-full bg-accent text-sm font-semibold text-white" aria-hidden>
+        <span className="relative grid size-8 place-items-center rounded-full bg-accent text-sm font-semibold text-white" aria-hidden>
           {initial}
+          {offline && (
+            <span className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full bg-amber-400 ring-2 ring-white" />
+          )}
         </span>
       </button>
 

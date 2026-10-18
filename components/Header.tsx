@@ -30,12 +30,6 @@ export default function Header({ month, onMonthChange, onSearch, onOpenSummary }
       <MonthNav month={month} onMonthChange={onMonthChange} onOpenSummary={onOpenSummary} />
 
       <div className="flex items-center gap-1">
-        {!online && (
-          <span className="flex h-7 items-center gap-1.5 rounded-full bg-white/60 px-2.5 text-[11px] font-semibold text-muted">
-            <span className="size-1.5 rounded-full bg-amber-400" />
-            Offline
-          </span>
-        )}
         <button
           type="button"
           aria-label="Search expenses"
@@ -48,7 +42,8 @@ export default function Header({ month, onMonthChange, onSearch, onOpenSummary }
           </svg>
         </button>
         <InstallButton />
-        <AccountButton />
+        {/* Offline shows as a dot on the avatar: a pill here pushed the avatar past the edge on phones. */}
+        <AccountButton offline={!online} />
       </div>
     </header>
   );
