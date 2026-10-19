@@ -39,6 +39,8 @@ export type Label = {
   lastUsedAt: number;
   createdAt: number;
   updatedAt: number;
+  /** Removed from the label manager. Only a label no live expense uses can be deleted. */
+  deletedAt?: number;
 };
 
 /**

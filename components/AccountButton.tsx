@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import LabelSheet from "./LabelSheet";
 import PinSheet, { type PinSheetMode } from "./PinSheet";
 import Sheet from "./Sheet";
 import { signOut, useUser } from "@/lib/auth";
@@ -28,6 +29,7 @@ export default function AccountButton({ offline = false }: { offline?: boolean }
   const sync = useSyncStatus();
   const [open, setOpen] = useState(false);
   const [pinSheet, setPinSheet] = useState<PinSheetMode | null>(null);
+  const [labelSheet, setLabelSheet] = useState(false);
   const email = user.email ?? "Signed in";
   const initial = email.charAt(0).toUpperCase();
 
@@ -67,6 +69,17 @@ export default function AccountButton({ offline = false }: { offline?: boolean }
             {syncText(sync)}
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setLabelSheet(true);
+          }}
+          className={`${rowClass} mb-5`}
+        >
+          Labels
+        </button>
 
         <section aria-label="Security" className="mb-5 flex flex-col gap-2">
           {hasPin ? (
@@ -133,6 +146,7 @@ export default function AccountButton({ offline = false }: { offline?: boolean }
         <p className="mt-3 text-center text-xs text-muted">Your expenses stay on this device, encrypted, and sync to your account.</p>
       </Sheet>
 
+      <LabelSheet open={labelSheet} onClose={() => setLabelSheet(false)} />
       <PinSheet mode={pinSheet} onDone={() => setPinSheet(null)} onCancel={() => setPinSheet(null)} />
     </>
   );

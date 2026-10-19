@@ -119,6 +119,12 @@ async function ensureLabels(userId, drafts) {
     usage.set(key, u);
   }
   const now = Date.now();
+  // A reused label that was deleted in the app comes back, as it would there.
+  const revived = [...usage.keys()].map((key) => existing.get(key)).filter((l) => l?.deletedAt != null).map((l) => l.id);
+  if (revived.length) {
+    const { error } = await supabase.from("labels").update({ deleted_at: null, updated_at: now }).in("id", revived);
+    if (error) fail(`Couldn't restore labels: ${error.message}`);
+  }
   const fresh = [...usage].filter(([key]) => !existing.has(key));
   const rows = fresh.map(([key, u], i) => ({
     id: randomUUID(),
@@ -137,13 +143,14 @@ async function ensureLabels(userId, drafts) {
     if (error) fail(`Couldn't add labels: ${error.message}`);
   }
   console.log(`Labels: ${existing.size ? `${usage.size - fresh.length} reused, ` : ""}${fresh.length} new.`);
-  return rows.length ? userLabels(userId) : existing;
+  const labels = rows.length ? await userLabels(userId) : existing;
+  return new Map([...labels].map(([key, l]) => [key, l.id]));
 }
 
 async function userLabels(userId) {
-  const { data, error } = await supabase.from("labels").select("id, key").eq("user_id", userId);
+  const { data, error } = await supabase.from("labels").select("id, key, deleted_at").eq("user_id", userId);
   if (error) fail(`Couldn't read labels: ${error.message}`);
-  return new Map(data.map((l) => [l.key, l.id]));
+  return new Map(data.map((l) => [l.key, { id: l.id, deletedAt: l.deleted_at }]));
 }
 
 // --- Generation ---------------------------------------------------------------

@@ -22,7 +22,8 @@ export default function LabelPicker({ value, onChange, labels }: Props) {
 
   const { matches, exact } = useMemo(() => {
     const all = [...labels.byId.values()];
-    const exact = key ? all.find((l) => l.key === key) : undefined;
+    // A deleted label reads as new; saving brings it back.
+    const exact = key ? all.find((l) => l.key === key && !l.deletedAt) : undefined;
     // While the field holds a known label, show every option; otherwise filter.
     const matches: Label[] =
       !key || exact ? labels.suggestions : labels.suggestions.filter((l) => l.key.includes(key));

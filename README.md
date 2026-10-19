@@ -59,6 +59,7 @@ To test offline mode, run `npm run build && npm start`, install the app as above
 | `lib/clock.ts` | `updatedAt` stamps, corrected to the server's clock |
 | `lib/sync.ts` | Background two-way sync with Supabase, and the sync status shown in Account |
 | `supabase/schema.sql` | Server tables, RLS and triggers. Paste it into the Supabase SQL editor |
+| `supabase/migrations/` | Changes to the server schema for projects set up earlier, one dated file each |
 | `components/Tracker.tsx` | The screen: month header, summary card, list, sheets |
 | `lib/db.ts` | Dexie schema (`expenses`, `labels`, `prefs`) and its migrations |
 | `lib/repo.ts` | **The only module that touches storage.** CRUD, label upsert, live queries, budget, and the sync helpers, all scoped to the signed-in user |
@@ -75,7 +76,7 @@ To test offline mode, run `npm run build && npm start`, install the app as above
 Expense { id: uuid, userId, box /* sealed { amount: int MMK, note } */, labelId, date: "YYYY-MM-DD",
           createdAt, updatedAt, deletedAt? /* soft delete */ }
 Label   { id: uuid, userId, box /* sealed { name } */, key /* HMAC of the normalised name, unique per user */,
-          color, useCount, lastUsedAt }
+          color, useCount, lastUsedAt, deletedAt? /* soft delete */ }
 Pref    { userId, key: "budget:YYYY-MM" | "privacy" | "autoLock" | "pinOffer" | "sync:*", value | box, updatedAt, deletedAt? }
         // primary key [userId, key]; budgets sealed; a removed budget is a tombstone (deletedAt); only budgets sync
 BudgetLine { id: uuid, name, amount: int /* MMK */ }  // a budget:YYYY-MM value is BudgetLine[]
@@ -85,6 +86,8 @@ Vault   { userId, kind: "password" | "pin", salt, iterations, iv, wrapped, faile
 **Budgets** are per month and never carry over. A month's budget is a list of named lines ("Monthly budget", "New extra", …), and its total is their sum. The first line of a new month's budget is named "Monthly budget". Before v6 of the schema, a budget was one number and could be set for every month (`budget:default`). The v6 upgrade turns each number into one "Monthly budget" line and writes the old every-month value out to each month it used to cover.
 
 **Labels** are free text and upserted on save. `prepareLabel()` normalises the name (trim, collapse spaces, lower-case), so `"coffee "`, `"Coffee"` and `"COFFEE"` all resolve to one label, and that label's usage count goes up. The picker suggests labels in most-recently-used order, and a label stops being suggested once no live expense uses it.
+
+**Account → Labels** lists every label with how many expenses use it. Renaming a label renames it on every expense. Renaming it to the name of another label offers to merge them: its expenses move to that label, and it's deleted. A label can be deleted only while no live expense uses it. A delete is soft (`deletedAt`), and the row keeps its key, so the name stays unique. Typing a deleted label's name again, or undoing the delete of one of its expenses, brings it back.
 
 ## Sign-in
 
@@ -112,6 +115,7 @@ Amounts, notes, label names and budgets are encrypted in IndexedDB with a per-us
 1. Create a Supabase project.
 2. In the SQL editor, paste and run [`supabase/schema.sql`](supabase/schema.sql). It creates the `mithril` schema with `expenses`, `labels` and `prefs`, row-level security, and the trigger that keeps the newest edit.
 3. **Project Settings → Data API → Exposed schemas:** add `mithril`. Until you do, sync fails with "Invalid schema".
+   A new project doesn't need anything from `supabase/migrations/`. A project set up earlier runs the migration files added since its setup, oldest first.
 4. **Authentication → Sign In / Providers:** turn off new sign-ups. Then go to **Authentication → Users → Add user** and add each account with "Auto confirm" on.
 5. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Find them under Project Settings → API Keys; the legacy anon key also works.
 

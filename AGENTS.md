@@ -32,7 +32,8 @@ Client-only, offline-first PWA: the app reads and writes IndexedDB (Dexie) on th
   - Hooks get the id from `useUser().id` and include it in the `useLiveQuery` deps.
   - Mutations (event handlers) call `currentUserId()`, which throws when nobody is signed in.
   - Query through the user indexes: `where("userId")`, `[userId+date]`, `[userId+key]`, `[userId+lastUsedAt]`. Never use a table-wide `filter()`/`toArray()`.
-  - Touch a single expense by id only through `ownExpense(userId, id)`, so an id can never reach another user's row.
+  - Touch a single expense by id only through `ownExpense(userId, id)`, and a single label only through `ownLabel(userId, id)`, so an id can never reach another user's row.
+  - A label is deleted only while no live expense uses it (`deleteLabel`), and softly: it keeps its key, so the name stays taken. `upsertLabel` and `restoreExpense` bring a deleted label back. A live expense never points to a deleted label. Renaming onto a taken name merges (`renameLabel` with `merge`).
   - Label names are unique **per user** (`&[userId+key]`). `upsertLabel(userId, name)` must run inside a transaction that includes `db.labels`.
   - Settings live in `prefs`, keyed `[userId, key]` (`budget:YYYY-MM`, `privacy`, `autoLock`, `pinOffer`, `sealPadded`, `sync:*`). There is no global settings table. Only `budget:*` syncs; the rest are per device.
   - A month's budget (`budget:YYYY-MM`) is a `BudgetLine[]` (`lib/budget.ts`) of named amounts; the budget is their sum. Months don't inherit budgets from each other, and there's no `budget:default` any more (v6 migrated it away).
@@ -47,7 +48,9 @@ Client-only, offline-first PWA: the app reads and writes IndexedDB (Dexie) on th
 - CSP is set in `next.config.ts`: `connect-src` is `'self'` plus the origin of `NEXT_PUBLIC_SUPABASE_URL`, read at build time.
 
 ### Supabase
-- Tables live in the **`mithril` schema** (not `public`), defined in `supabase/schema.sql`. It's pasted into the SQL editor; there's no CLI or migrations folder. Change the schema by editing that file and writing the matching `alter` statements for existing projects. `mithril` must be listed under Data API → Exposed schemas.
+- Tables live in the **`mithril` schema** (not `public`), defined in `supabase/schema.sql`. It's pasted into the SQL editor; there's no Supabase CLI. `mithril` must be listed under Data API → Exposed schemas. Every server schema change does **both**:
+  - Update `supabase/schema.sql`, so it always sets up a new project in full.
+  - Add a migration file for existing projects in `supabase/migrations/`, named `YYYYMMDD_short_name.sql`. It holds only that change (`alter ...`, written to be safe to run again, such as `if not exists`). Never edit a migration that has already been added; write a new one.
 - `lib/supabase.ts` creates the client lazily (`supabase()`, `db.schema = "mithril"`) from `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Without them the build still works, and sign-in says it isn't set up.
 - Server rows mirror the Dexie rows in snake_case, with `user_id`, bigint ms timestamps and a server-set `synced_at`. RLS is `auth.uid() = user_id`. `authenticated` gets select, insert and update only, with no deletes. A trigger ignores a write whose `updated_at` isn't newer than the stored one, brings a stamp more than 5 minutes in the future back to the server's time, and lets a newer write replace a stored stamp from the future. `mithril.server_time()` returns the server's clock in ms.
 - Sync sends **opened** values: the server can read the data, and RLS protects it. The vault is never synced, and each device makes its own keys.

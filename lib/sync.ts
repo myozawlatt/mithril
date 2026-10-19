@@ -73,7 +73,7 @@ export function useSyncStatus(): SyncStatus {
 }
 
 // Server rows (snake_case). bigint columns arrive as JSON numbers.
-type LabelRecord = { id: string; name: string; color: string; use_count: number; last_used_at: number; created_at: number; updated_at: number };
+type LabelRecord = { id: string; name: string; color: string; use_count: number; last_used_at: number; created_at: number; updated_at: number; deleted_at: number | null };
 type ExpenseRecord = { id: string; amount: number; note: string; label_id: string; date: string; created_at: number; updated_at: number; deleted_at: number | null };
 type PrefRecord = { key: string; value: SyncBudget["value"]; updated_at: number; deleted_at: number | null };
 type Stamped = { synced_at: string };
@@ -86,6 +86,7 @@ const fromLabel = (r: LabelRecord): SyncLabel => ({
   lastUsedAt: r.last_used_at,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
+  ...(r.deleted_at != null ? { deletedAt: r.deleted_at } : {}),
 });
 
 const fromExpense = (r: ExpenseRecord): SyncExpense => ({
@@ -116,6 +117,7 @@ const toLabel = (userId: string, l: SyncLabel) => ({
   last_used_at: l.lastUsedAt,
   created_at: l.createdAt,
   updated_at: l.updatedAt,
+  deleted_at: l.deletedAt ?? null,
 });
 
 const toExpense = (userId: string, e: SyncExpense) => ({

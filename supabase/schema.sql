@@ -5,6 +5,9 @@
 --   2. Authentication → Sign In / Providers: turn off "Allow new users to sign up".
 --      Accounts are added by hand (Authentication → Users → Add user, auto-confirm).
 --
+-- This file is the full schema, for a new project. A project set up earlier
+-- runs the files in `supabase/migrations/` made since, oldest first, instead.
+--
 -- Rows mirror the app's IndexedDB tables 1:1 (see lib/db.ts). Timestamps are
 -- epoch milliseconds set by the client; `synced_at` is set here and is what
 -- clients pull by. Nothing is ever deleted by the app (soft deletes), so there
@@ -25,6 +28,9 @@ create table mithril.labels (
   last_used_at bigint not null,
   created_at   bigint not null,
   updated_at   bigint not null,
+  -- Deleted in the label manager (only when no live expense used it). The row
+  -- keeps its key, so the name stays taken until it's used again.
+  deleted_at   bigint,
   synced_at    timestamptz not null default now(),
   unique (user_id, key)
 );

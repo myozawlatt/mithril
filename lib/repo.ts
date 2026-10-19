@@ -88,10 +88,12 @@ export async function upsertLabel(userId: string, label: PreparedLabel): Promise
   const existing = await db.labels.where("[userId+key]").equals([userId, label.key]).first();
 
   if (existing) {
+    // A deleted label comes back when its name is used again.
     await db.labels.update(existing.id, {
       useCount: existing.useCount + 1,
       lastUsedAt: Math.max(existing.lastUsedAt, now),
       updatedAt: clock.stamp(existing.updatedAt),
+      deletedAt: undefined,
     });
     return existing.id;
   }
@@ -111,6 +113,19 @@ export async function upsertLabel(userId: string, label: PreparedLabel): Promise
 /** One of the user's expenses by id; never another user's, even if an id leaks. */
 function ownExpense(userId: string, id: string) {
   return db.expenses.where("id").equals(id).filter((e) => e.userId === userId);
+}
+
+/** One of the user's labels by id; never another user's. */
+function ownLabel(userId: string, id: string) {
+  return db.labels.where("id").equals(id).filter((l) => l.userId === userId);
+}
+
+/** The user's live expenses filed under a label. */
+function liveExpensesWithLabel(userId: string, labelId: string) {
+  return db.expenses
+    .where("labelId")
+    .equals(labelId)
+    .filter((e) => e.userId === userId && !e.deletedAt);
 }
 
 /** The user's live (not deleted) expenses. */
@@ -158,11 +173,25 @@ export async function deleteExpense(id: string): Promise<void> {
   });
 }
 
-/** Undo a delete. Bumps updatedAt so a future sync sees the revival. */
+/**
+ * Undo a delete. Bumps updatedAt so a future sync sees the revival. A label
+ * deleted meanwhile comes back with it, so a live expense never has a deleted label.
+ */
 export async function restoreExpense(id: string): Promise<void> {
-  await ownExpense(currentUserId(), id).modify((e) => {
-    delete e.deletedAt;
-    e.updatedAt = clock.stamp(e.updatedAt);
+  const userId = currentUserId();
+  await db.transaction("rw", db.expenses, db.labels, async () => {
+    const expense = await ownExpense(userId, id).first();
+    if (!expense) return;
+    await ownExpense(userId, id).modify((e) => {
+      delete e.deletedAt;
+      e.updatedAt = clock.stamp(e.updatedAt);
+    });
+    await ownLabel(userId, expense.labelId)
+      .filter((l) => !!l.deletedAt)
+      .modify((l) => {
+        delete l.deletedAt;
+        l.updatedAt = clock.stamp(l.updatedAt);
+      });
   });
 }
 
@@ -244,6 +273,119 @@ export function useLabels(): LabelIndex | undefined {
       suggestions: labels.filter((l) => inUse.has(l.id)),
     };
   }, [userId]);
+}
+
+export type LabelUsage = { label: Label; /** Live expenses filed under it. */ count: number };
+
+/**
+ * Every label for the label manager, by name. Deleted ones are left out, unless
+ * a live expense still uses one (another device filed an expense under it meanwhile).
+ */
+export function useLabelUsage(): LabelUsage[] | undefined {
+  const userId = useUser().id;
+  return useLiveQuery(async () => {
+    const [rows, counts] = await Promise.all([
+      db.labels.where("userId").equals(userId).toArray(),
+      (async () => {
+        const counts = new Map<string, number>();
+        await userExpenses(userId).each((e) => counts.set(e.labelId, (counts.get(e.labelId) ?? 0) + 1));
+        return counts;
+      })(),
+    ]);
+    const labels = await openAll(
+      rows.filter((l) => !l.deletedAt || counts.has(l.id)),
+      openLabel,
+    );
+    return labels
+      .map((label) => ({ label, count: counts.get(label.id) ?? 0 }))
+      .sort((a, b) => a.label.name.localeCompare(b.label.name));
+  }, [userId]);
+}
+
+/** Renaming onto a name another live label has; `renameLabel` with `merge` folds them together. */
+export class LabelNameTakenError extends Error {
+  constructor(
+    /** The name as that label has it. */
+    readonly taken: string,
+    /** Live expenses that would move into it. */
+    readonly moving: number,
+  ) {
+    super(`A label called “${taken}” already exists`);
+  }
+}
+
+/** Deleting a label that live expenses still use. */
+export class LabelInUseError extends Error {
+  constructor(readonly count: number) {
+    super(`The label is used by ${count} expense${count === 1 ? "" : "s"}`);
+  }
+}
+
+/**
+ * Rename one of the user's labels; its expenses show the new name everywhere.
+ * When another label already has the name, the two merge (`merge: true`, else
+ * `LabelNameTakenError`): this label's expenses move to that one, and this one
+ * is deleted. A deleted label with the name always merges, silently. The
+ * deleted label keeps its old key, so names stay unique here and on the server.
+ */
+export async function renameLabel(id: string, name: string, { merge = false } = {}): Promise<void> {
+  const userId = currentUserId();
+  const clean = cleanLabelName(name);
+  if (!clean) throw new Error("A label needs a name");
+  const keys = keysFor(userId);
+  const key = await blindIndex(keys.mac, labelKey(clean));
+  const holder = await db.labels.where("[userId+key]").equals([userId, key]).first();
+  const twin = holder && holder.id !== id ? holder : undefined;
+  if (twin && !twin.deletedAt && !merge) {
+    const [twinLabel, moving] = await Promise.all([openLabel(twin), liveExpensesWithLabel(userId, id).count()]);
+    throw new LabelNameTakenError(twinLabel.name, moving);
+  }
+  // The name is sealed for the label that ends up with it.
+  const box = await seal(keys.enc, { name: clean }, aad(userId, "labels", twin?.id ?? id));
+
+  await db.transaction("rw", db.labels, db.expenses, async () => {
+    const own = await ownLabel(userId, id).first();
+    if (!own) return;
+    const current = await db.labels.where("[userId+key]").equals([userId, key]).first();
+    if (current?.id !== holder?.id || current?.updatedAt !== holder?.updatedAt) {
+      throw new Error("Labels changed meanwhile; try again");
+    }
+    if (!twin) {
+      await db.labels.update(id, { key, box, updatedAt: clock.stamp(own.updatedAt) });
+      return;
+    }
+    // Deleted expenses move too, so Undo puts them back under the merged label.
+    await db.expenses
+      .where("labelId")
+      .equals(id)
+      .filter((e) => e.userId === userId)
+      .modify((e) => {
+        e.labelId = twin.id;
+        e.updatedAt = clock.stamp(e.updatedAt);
+      });
+    await db.labels.update(twin.id, {
+      box,
+      // A live label keeps its colour; a deleted one takes over this label's.
+      color: twin.deletedAt ? own.color : twin.color,
+      useCount: twin.useCount + own.useCount,
+      lastUsedAt: Math.max(twin.lastUsedAt, own.lastUsedAt),
+      updatedAt: clock.stamp(twin.updatedAt),
+      deletedAt: undefined,
+    });
+    await db.labels.update(id, { deletedAt: clock.now(), updatedAt: clock.stamp(own.updatedAt) });
+  });
+}
+
+/** Delete one of the user's labels. Only one no live expense uses (`LabelInUseError`). */
+export async function deleteLabel(id: string): Promise<void> {
+  const userId = currentUserId();
+  await db.transaction("rw", db.labels, db.expenses, async () => {
+    const own = await ownLabel(userId, id).first();
+    if (!own || own.deletedAt) return;
+    const count = await liveExpensesWithLabel(userId, id).count();
+    if (count) throw new LabelInUseError(count);
+    await db.labels.update(id, { deletedAt: clock.now(), updatedAt: clock.stamp(own.updatedAt) });
+  });
 }
 
 /** Whether the user has any live expense at all; `undefined` while loading. */
@@ -487,7 +629,7 @@ export async function requestPersistentStorage(): Promise<void> {
 // values under RLS, and this device keeps them sealed.
 
 /** A label as synced: plain name; the server derives its unique key from it. */
-export type SyncLabel = Pick<Label, "id" | "name" | "color" | "useCount" | "lastUsedAt" | "createdAt" | "updatedAt">;
+export type SyncLabel = Pick<Label, "id" | "name" | "color" | "useCount" | "lastUsedAt" | "createdAt" | "updatedAt" | "deletedAt">;
 export type SyncExpense = Omit<Expense, "userId">;
 /** A month's budget as synced. `value` is null for a removed budget. */
 export type SyncBudget = { key: string; value: BudgetLine[] | null; updatedAt: number; deletedAt?: number };
@@ -512,7 +654,7 @@ export async function pendingChanges(userId: string, since: number): Promise<Syn
     })),
   ]);
   return {
-    labels: labels.map(({ id, name, color, useCount, lastUsedAt, createdAt, updatedAt }) => ({ id, name, color, useCount, lastUsedAt, createdAt, updatedAt })),
+    labels: labels.map(({ id, name, color, useCount, lastUsedAt, createdAt, updatedAt, deletedAt }) => ({ id, name, color, useCount, lastUsedAt, createdAt, updatedAt, ...(deletedAt ? { deletedAt } : {}) })),
     expenses: expenses.map(({ id, amount, note, labelId, date, createdAt, updatedAt, deletedAt }) => ({ id, amount, note, labelId, date, createdAt, updatedAt, ...(deletedAt ? { deletedAt } : {}) })),
     prefs,
   };
@@ -535,7 +677,18 @@ export async function applyRemote(userId: string, batch: SyncBatch): Promise<voi
         blindIndex(keys.mac, labelKey(name)),
         seal(keys.enc, { name }, aad(userId, "labels", l.id)),
       ]);
-      return { id: l.id, userId, key, box, color: l.color, useCount: l.useCount, lastUsedAt: l.lastUsedAt, createdAt: l.createdAt, updatedAt: l.updatedAt };
+      return {
+        id: l.id,
+        userId,
+        key,
+        box,
+        color: l.color,
+        useCount: l.useCount,
+        lastUsedAt: l.lastUsedAt,
+        createdAt: l.createdAt,
+        updatedAt: l.updatedAt,
+        ...(l.deletedAt ? { deletedAt: l.deletedAt } : {}),
+      };
     }),
     openAll(batch.expenses, (e) => sealExpense({ ...e, userId })),
     openAll(batch.prefs, async (p): Promise<Pref> =>
@@ -567,6 +720,8 @@ export async function applyRemote(userId: string, batch: SyncBatch): Promise<voi
         label.useCount += twin.useCount;
         label.lastUsedAt = Math.max(label.lastUsedAt, twin.lastUsedAt);
         label.updatedAt = clock.stamp(label.updatedAt);
+        // The local label's expenses now use the pulled one, so it can't stay deleted.
+        if (!twin.deletedAt) delete label.deletedAt;
       }
       await db.labels.put(label);
     }
