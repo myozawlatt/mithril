@@ -4,6 +4,9 @@ export type BudgetLine = { id: string; name: string; /** Whole MMK, > 0. */ amou
 /** Name of the first line when a month's budget is set up. */
 export const DEFAULT_BUDGET_LINE_NAME = "Monthly budget";
 
+/** Longest name a budget line can have. */
+export const BUDGET_NAME_MAX = 32;
+
 /** A stored `budget:YYYY-MM` value as lines; anything malformed is dropped. */
 export function asLines(value: unknown): BudgetLine[] {
   if (!Array.isArray(value)) return [];

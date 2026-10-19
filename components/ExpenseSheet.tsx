@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import AmountInput from "./AmountInput";
+import CharCount from "./CharCount";
 import LabelPicker from "./LabelPicker";
 import Sheet from "./Sheet";
 import type { Expense } from "@/lib/db";
@@ -117,22 +118,9 @@ function ExpenseForm({
             enterKeyHint="done"
             aria-label="Note"
             aria-describedby={noteCountId}
-            className="block min-h-12 w-full resize-none overflow-hidden rounded-2xl bg-accent-soft/70 py-3.5 pr-12 pl-4 text-sm leading-5 text-ink outline-none placeholder:text-muted focus:ring-2 focus:ring-violet-300"
+            className="block min-h-12 w-full resize-none overflow-hidden rounded-2xl bg-accent-soft/70 px-4 py-3.5 text-sm leading-5 text-ink outline-none placeholder:text-muted focus:ring-2 focus:ring-violet-300"
           />
-          {/* Count and limit sit on the last line, clear of the text (pr-12). */}
-          <span
-            id={noteCountId}
-            className={`pointer-events-none absolute right-3 bottom-3.5 text-[11px] leading-5 tabular-nums ${
-              note.length >= NOTE_MAX ? "font-semibold text-rose-700" : "text-muted"
-            }`}
-          >
-            <span aria-hidden>
-              {note.length}/{NOTE_MAX}
-            </span>
-            <span className="sr-only">
-              {note.length} of {NOTE_MAX} characters
-            </span>
-          </span>
+          <CharCount id={noteCountId} length={note.length} max={NOTE_MAX} />
         </div>
       </div>
 

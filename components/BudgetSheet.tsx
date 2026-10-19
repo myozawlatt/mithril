@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import CharCount from "./CharCount";
 import Sheet from "./Sheet";
-import { DEFAULT_BUDGET_LINE_NAME, type BudgetLine } from "@/lib/budget";
+import { BUDGET_NAME_MAX, DEFAULT_BUDGET_LINE_NAME, type BudgetLine } from "@/lib/budget";
 import { formatNumber, monthLabel, parseAmount, type MonthKey } from "@/lib/format";
 import { newId, setBudget } from "@/lib/repo";
 
@@ -19,6 +20,56 @@ export default function BudgetSheet({ open, onClose, month, lines }: Props) {
     <Sheet open={open} onClose={onClose} title={`Budget · ${monthLabel(month)}`}>
       {open && <BudgetForm key={month} month={month} saved={lines} onDone={onClose} />}
     </Sheet>
+  );
+}
+
+/** A line's name: wraps and grows for long names, and Enter moves on to the amount. */
+function NameField({
+  line,
+  value,
+  onChange,
+  onNext,
+}: {
+  line: string;
+  value: string;
+  onChange: (name: string) => void;
+  onNext: () => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const countId = useId();
+
+  // Grow the box to fit its wrapped lines.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <div className="relative min-w-0">
+      <textarea
+        ref={ref}
+        data-line={line}
+        data-field="name"
+        value={value}
+        onChange={(e) => onChange(e.target.value.replace(/\s*\n\s*/g, " "))}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          onNext();
+        }}
+        placeholder="e.g. New extra"
+        maxLength={BUDGET_NAME_MAX}
+        rows={1}
+        enterKeyHint="next"
+        autoCapitalize="words"
+        aria-label="Budget name"
+        aria-describedby={countId}
+        className="block min-h-12 w-full resize-none overflow-hidden rounded-2xl bg-accent-soft/70 px-4 py-3.5 text-[15px] leading-5 font-medium text-ink outline-none placeholder:font-normal placeholder:text-muted focus:ring-2 focus:ring-violet-300"
+      />
+      <CharCount id={countId} length={value.length} max={BUDGET_NAME_MAX} />
+    </div>
   );
 }
 
@@ -45,7 +96,7 @@ function BudgetForm({ month, saved, onDone }: { month: MonthKey; saved: BudgetLi
     focus.current = null;
     // Wait for the slide-in so iOS keeps the sheet in view.
     const t = setTimeout(() => {
-      listRef.current?.querySelector<HTMLInputElement>(`[data-line="${target.id}"][data-field="${target.field}"]`)?.focus();
+      listRef.current?.querySelector<HTMLElement>(`[data-line="${target.id}"][data-field="${target.field}"]`)?.focus();
     }, 120);
     return () => clearTimeout(t);
   }, [drafts.length]);
@@ -80,22 +131,29 @@ function BudgetForm({ month, saved, onDone }: { month: MonthKey; saved: BudgetLi
 
   return (
     <form onSubmit={save} className="flex flex-col gap-4">
-      <ul ref={listRef} className="-mx-1 flex max-h-[45vh] flex-col gap-2 overflow-y-auto px-1 py-1">
+      {/* pt-3 keeps the first counter legend clear of the scroll edge. */}
+      <ul ref={listRef} className="-mx-1 flex max-h-[45vh] flex-col gap-4 overflow-y-auto px-1 pt-3 pb-1">
         {drafts.map((d) => (
-          <li key={d.id} className="flex items-center gap-2">
-            <input
-              data-line={d.id}
-              data-field="name"
+          <li key={d.id} className="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1.5">
+            <NameField
+              line={d.id}
               value={d.name}
-              onChange={(e) => edit(d.id, { name: e.target.value })}
-              placeholder="e.g. New extra"
-              maxLength={32}
-              enterKeyHint="next"
-              autoCapitalize="words"
-              aria-label="Budget name"
-              className="h-12 min-w-0 flex-1 rounded-2xl bg-accent-soft/70 px-4 text-[15px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-muted focus:ring-2 focus:ring-violet-300"
+              onChange={(name) => edit(d.id, { name })}
+              onNext={() =>
+                listRef.current?.querySelector<HTMLInputElement>(`[data-line="${d.id}"][data-field="amount"]`)?.focus()
+              }
             />
-            <label className="flex h-12 w-36 shrink-0 items-center gap-1.5 rounded-2xl bg-accent-soft/70 px-3 focus-within:ring-2 focus-within:ring-violet-300">
+            <button
+              type="button"
+              onClick={() => remove(d.id)}
+              aria-label={`Remove ${d.name || "line"}`}
+              className="grid size-10 shrink-0 place-items-center rounded-full text-muted transition active:bg-accent-soft"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <label className="flex h-12 items-center gap-1.5 rounded-2xl bg-accent-soft/70 px-3 focus-within:ring-2 focus-within:ring-violet-300">
               <span className="text-xs font-medium text-muted">MMK</span>
               <input
                 data-line={d.id}
@@ -112,16 +170,6 @@ function BudgetForm({ month, saved, onDone }: { month: MonthKey; saved: BudgetLi
                 className="min-w-0 flex-1 bg-transparent text-right text-[15px] font-semibold tabular-nums text-ink outline-none placeholder:text-muted"
               />
             </label>
-            <button
-              type="button"
-              onClick={() => remove(d.id)}
-              aria-label={`Remove ${d.name || "line"}`}
-              className="grid size-10 shrink-0 place-items-center rounded-full text-muted transition active:bg-accent-soft"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
           </li>
         ))}
       </ul>
