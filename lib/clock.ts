@@ -20,5 +20,6 @@ export function stamp(prev = 0): number {
 
 /** How far the server's clock is ahead of this device's (negative when behind). */
 export function setServerOffset(ms: number): void {
-  offset = ms;
+  // Whole ms: stamps go to bigint columns, and a half-round-trip estimate can be fractional.
+  offset = Math.round(ms);
 }

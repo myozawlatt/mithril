@@ -5,7 +5,7 @@ import LabelSheet from "./LabelSheet";
 import PinSheet, { type PinSheetMode } from "./PinSheet";
 import Sheet from "./Sheet";
 import { signOut, useUser } from "@/lib/auth";
-import { useSyncStatus, type SyncStatus } from "@/lib/sync";
+import { syncNow, useSyncStatus, type SyncStatus } from "@/lib/sync";
 import { leaveWeb } from "@/lib/useInstallPrompt";
 import { AUTO_LOCK_CHOICES, lock, setAutoLock, useAutoLock, useHasPin } from "@/lib/vault";
 
@@ -68,6 +68,19 @@ export default function AccountButton({ offline = false }: { offline?: boolean }
           <p className="mt-1 text-xs text-muted" aria-live="polite">
             {syncText(sync)}
           </p>
+          {sync.state === "error" && sync.error && (
+            <p className="mt-1 text-xs break-words text-rose-700 select-text">{sync.error}</p>
+          )}
+          {sync.state !== "off" && (
+            <button
+              type="button"
+              disabled={sync.state === "syncing"}
+              onClick={() => void syncNow(user.id)}
+              className="mt-2 h-9 rounded-xl px-3 text-xs font-semibold text-accent-ink transition active:bg-white/60 disabled:opacity-50"
+            >
+              Sync now
+            </button>
+          )}
         </div>
 
         <button

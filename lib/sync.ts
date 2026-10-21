@@ -50,9 +50,11 @@ export type SyncStatus = {
   lastSyncedAt: number | null;
   /** This device has pulled at least once (or the first try this session ended), so "no data" is real. */
   ready: boolean;
+  /** Why the last run failed, while `state` is "error". */
+  error: string | null;
 };
 
-const INITIAL: SyncStatus = { state: "idle", lastSyncedAt: null, ready: false };
+const INITIAL: SyncStatus = { state: "idle", lastSyncedAt: null, ready: false, error: null };
 let status: SyncStatus = INITIAL;
 const listeners = new Set<() => void>();
 
@@ -107,6 +109,14 @@ const fromPref = (r: PrefRecord): SyncBudget => ({
   ...(r.deleted_at != null ? { deletedAt: r.deleted_at } : {}),
 });
 
+/**
+ * Stamps as the server's bigint columns take them. Rows stamped before the clock
+ * offset was rounded can hold fractions; rounding up keeps an edit newer than
+ * what it replaced, and the next pull brings the whole value back to this device.
+ */
+const ms = (t: number) => Math.ceil(t);
+const msOrNull = (t: number | undefined) => (t != null ? Math.ceil(t) : null);
+
 const toLabel = (userId: string, l: SyncLabel) => ({
   id: l.id,
   user_id: userId,
@@ -114,10 +124,10 @@ const toLabel = (userId: string, l: SyncLabel) => ({
   key: labelKey(l.name),
   color: l.color,
   use_count: l.useCount,
-  last_used_at: l.lastUsedAt,
-  created_at: l.createdAt,
-  updated_at: l.updatedAt,
-  deleted_at: l.deletedAt ?? null,
+  last_used_at: ms(l.lastUsedAt),
+  created_at: ms(l.createdAt),
+  updated_at: ms(l.updatedAt),
+  deleted_at: msOrNull(l.deletedAt),
 });
 
 const toExpense = (userId: string, e: SyncExpense) => ({
@@ -127,17 +137,17 @@ const toExpense = (userId: string, e: SyncExpense) => ({
   note: e.note,
   label_id: e.labelId,
   date: e.date,
-  created_at: e.createdAt,
-  updated_at: e.updatedAt,
-  deleted_at: e.deletedAt ?? null,
+  created_at: ms(e.createdAt),
+  updated_at: ms(e.updatedAt),
+  deleted_at: msOrNull(e.deletedAt),
 });
 
 const toPref = (userId: string, p: SyncBudget) => ({
   user_id: userId,
   key: p.key,
   value: p.value,
-  updated_at: p.updatedAt,
-  deleted_at: p.deletedAt ?? null,
+  updated_at: ms(p.updatedAt),
+  deleted_at: msOrNull(p.deletedAt),
 });
 
 /** Thrown for a failed request, so a label-name clash can be told apart. */
@@ -215,6 +225,13 @@ async function push(userId: string): Promise<void> {
   await setSyncCursor(userId, "pushedAt", upTo);
 }
 
+/** A short reason for the Account sheet, with the PostgREST/Postgres code when there is one. */
+function describe(err: unknown): string {
+  if (err instanceof SyncError) return err.code ? `${err.message} (${err.code})` : err.message;
+  if (err instanceof Error) return `${err.name}: ${err.message}`;
+  return String(err);
+}
+
 let running: Promise<void> | null = null;
 /** A sync asked for while one was running; `pull` if any of those wanted a pull. */
 let queued: { userId: string; pull: boolean } | null = null;
@@ -235,13 +252,13 @@ export function syncNow(userId: string, opts: { pull: boolean } = { pull: true }
 }
 
 async function run(userId: string, withPull: boolean): Promise<void> {
-  if (!isSupabaseConfigured) return setStatus({ state: "off", ready: true });
-  if (!navigator.onLine) return setStatus({ state: "offline" });
+  if (!isSupabaseConfigured) return setStatus({ state: "off", ready: true, error: null });
+  if (!navigator.onLine) return setStatus({ state: "offline", error: null });
   setStatus({ state: "syncing" });
   try {
     const { data } = await supabase().auth.getSession();
     // No live session: offline with an expired token, or signed in as someone else.
-    if (data.session?.user.id !== userId) return setStatus({ state: navigator.onLine ? "idle" : "offline", ready: true });
+    if (data.session?.user.id !== userId) return setStatus({ state: navigator.onLine ? "idle" : "offline", ready: true, error: null });
     const exclusive = async () => {
       if (withPull) {
         await alignClock(userId);
@@ -259,13 +276,14 @@ async function run(userId: string, withPull: boolean): Promise<void> {
     };
     if (navigator.locks) await navigator.locks.request(`mithril-sync:${userId}`, exclusive);
     else await exclusive();
-    setStatus({ state: "idle", lastSyncedAt: Date.now(), ready: status.ready || withPull });
+    setStatus({ state: "idle", lastSyncedAt: Date.now(), ready: status.ready || withPull, error: null });
   } catch (err) {
     // Locked mid-sync: the keys are gone; the next unlock syncs again.
-    if (err instanceof Error && err.message === "Locked") return setStatus({ state: "idle" });
-    const offline = !navigator.onLine || (err instanceof TypeError && /fetch/i.test(err.message));
+    if (err instanceof Error && err.message === "Locked") return setStatus({ state: "idle", error: null });
+    // "Failed to fetch" (Chrome), "Load failed" (Safari), "NetworkError …" (Firefox).
+    const offline = !navigator.onLine || (err instanceof TypeError && /fetch|load failed|network/i.test(err.message));
     if (!offline) console.warn("Sync failed", err);
-    setStatus({ state: offline ? "offline" : "error", ready: true });
+    setStatus({ state: offline ? "offline" : "error", ready: true, error: offline ? null : describe(err) });
   }
 }
 
