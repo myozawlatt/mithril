@@ -13,24 +13,29 @@ type Props = {
 };
 
 /**
- * Type any label or tap a recent one. Saving upserts by normalised name, so
- * "coffee" and "Coffee " reuse the same label instead of creating a duplicate.
+ * Type any label. An empty field shows no suggestions; typing suggests labels
+ * that match; once the field holds an existing label, it shows first, selected,
+ * followed by any longer labels that contain it. Saving upserts by normalised name, so "coffee" and "Coffee " reuse
+ * the same label instead of creating a duplicate.
  */
 export default function LabelPicker({ value, onChange, labels }: Props) {
   const key = labelKey(value);
   const countId = useId();
+  const listId = useId();
 
   const { matches, exact } = useMemo(() => {
     const all = [...labels.byId.values()];
     // A deleted label reads as new; saving brings it back.
     const exact = key ? all.find((l) => l.key === key && !l.deletedAt) : undefined;
-    // While the field holds a known label, show every option; otherwise filter.
-    const matches: Label[] =
-      !key || exact ? labels.suggestions : labels.suggestions.filter((l) => l.key.includes(key));
+    // The exact label leads, so a longer name ("Coffee beans") stays tappable
+    // after typing a shorter one ("Coffee").
+    const related = key ? labels.suggestions.filter((l) => l.key.includes(key) && l.id !== exact?.id) : [];
+    const matches: Label[] = exact ? [exact, ...related] : related;
     return { matches, exact };
   }, [labels, key]);
 
   const isNew = !!key && !exact;
+  const showList = matches.length > 0;
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -38,6 +43,10 @@ export default function LabelPicker({ value, onChange, labels }: Props) {
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={showList}
+          aria-controls={listId}
           placeholder="Label, e.g. Coffee"
           maxLength={LABEL_MAX}
           enterKeyHint="done"
@@ -54,8 +63,8 @@ export default function LabelPicker({ value, onChange, labels }: Props) {
         <CharCount id={countId} length={value.length} max={LABEL_MAX} />
       </div>
 
-      {matches.length > 0 && (
-        <div role="listbox" aria-label="Recent labels" className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 scrollbar-none">
+      {showList && (
+        <div id={listId} role="listbox" aria-label="Label suggestions" className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 scrollbar-none">
           {matches.map((l) => {
             const active = l.key === key;
             return (
